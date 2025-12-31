@@ -17,7 +17,6 @@ jobs:
       - name: Configure TVBoxOSC Signing
         run: |
           cd android
-          ls -l app/TVBoxOSC.jks
           cat <<'EOF' >> gradle.properties
           FONGMIBOX_STORE_FILE=../app/TVBoxOSC.jks
           FONGMIBOX_KEY_ALIAS=TVBoxOSC
@@ -31,15 +30,12 @@ jobs:
           chmod +x ./gradlew
           ./gradlew clean assembleRelease --parallel --daemon --warning-mode all
 
-      - name: Generate file MD5
-        run: |
-          cd android/app/build/outputs/apk/release
-          md5sum *.apk
-
       - name: Upload Artifact
-        uses: ./.github/actions/upload-artifact
+        uses: actions/upload-artifact@v4
         with:
-          # 设置产物保留期为 1 天，确保只占用极少空间
+          name: android-build
+          # 找到生成的 apk 文件并上传
+          path: android/app/build/outputs/apk/release/*.apk
           retention-days: 1
 
   Release:
@@ -53,36 +49,26 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
+          name: android-build
           path: ./artifacts
-          merge-multiple: true
 
-      - name: Generate file MD5
-        run: |
-          mkdir -p ./publish
-          echo -e '\n### File MD5\n```' >> ./publish/changeLog.md
-          cd artifacts
-          md5sum *.apk >> ../publish/changeLog.md
-          echo -e '```\n' >> ../publish/changeLog.md
-
-      # 关键步骤：在发布新版前，先删除旧的同名 Tag 或 Release 
-      # 这样可以确保 Release 页面永远只看到最后一次运行的结果
+      # 彻底删除旧的 Release 和 Tag，确保只保留最后一次
       - name: Delete Old Release
         uses: dev-drprasad/delete-tag-and-release@v1.1
         with:
           delete_release: true
-          tag_name: latest-build # 使用固定标签
+          tag_name: latest-build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          body_path: ./publish/changeLog.md
+          tag_name: latest-build
+          name: "Latest Build"
+          body: "Last Build: ${{ github.event.head_commit.message }}"
           prerelease: false
           draft: false
-          tag_name: latest-build # 使用固定的 tag，每次都会覆盖
-          name: "Latest Build"
-          files: |
-            artifacts/*.apk
+          files: ./artifacts/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
