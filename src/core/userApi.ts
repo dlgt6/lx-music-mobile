@@ -1,5 +1,5 @@
 import { action, state } from '@/store/userApi'
-import { addUserApi, getUserApiScript, removeUserApi as removeUserApiFromStore, setUserApiAllowShowUpdateAlert as setUserApiAllowShowUpdateAlertFromStore } from '@/utils/data'
+import { addUserApi, getUserApiList, getUserApiScript, removeUserApi as removeUserApiFromStore, setUserApiAllowShowUpdateAlert as setUserApiAllowShowUpdateAlertFromStore, setUserApiAutoUpdate as setUserApiAutoUpdateFromStore } from '@/utils/data'
 import { destroy, loadScript } from '@/utils/nativeModules/userApi'
 import { log as writeLog } from '@/utils/log'
 
@@ -27,9 +27,10 @@ export const setUserApiList: typeof action['setUserApiList'] = (list) => {
   action.setUserApiList(list)
 }
 
-export const importUserApi = async(script: string) => {
-  const info = await addUserApi(script)
-  action.addUserApi(info)
+export const importUserApi = async(script: string, url?: string) => {
+  const info = await addUserApi(script, url)
+  setUserApiList(await getUserApiList())
+  return info
 }
 
 export const removeUserApi = async(ids: string[]) => {
@@ -40,6 +41,11 @@ export const removeUserApi = async(ids: string[]) => {
 export const setUserApiAllowShowUpdateAlert = async(id: string, enable: boolean) => {
   await setUserApiAllowShowUpdateAlertFromStore(id, enable)
   action.setUserApiAllowShowUpdateAlert(id, enable)
+}
+
+export const setUserApiAutoUpdate = async(id: string, enable: boolean) => {
+  await setUserApiAutoUpdateFromStore(id, enable)
+  setUserApiList(await getUserApiList())
 }
 
 export const log = {
