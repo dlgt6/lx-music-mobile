@@ -1,5 +1,6 @@
 import { getData, saveData, getAllKeys, removeDataMultiple, saveDataMultiple, removeData, getDataMultiple } from '@/plugins/storage'
 import { DEFAULT_SETTING, LIST_IDS, storageDataPrefix, type NAV_ID_Type } from '@/config/constant'
+import { stringMd5 } from 'react-native-quick-md5'
 import { throttle } from './common'
 // import { gzip, ungzip } from '@/utils/nativeModules/gzip'
 // import { readFile, writeFile, temporaryDirectoryPath, unlink } from '@/utils/fs'
@@ -551,17 +552,69 @@ const matchInfo = (scriptInfo: string) => {
 
   return infos as Record<keyof typeof INFO_NAMES, string>
 }
-export const addUserApi = async(script: string): Promise<LX.UserApi.UserApiInfo> => {
+const parseUserApiScriptInfo = (script: string) => {
   const result = /^\/\*[\S|\s]+?\*\//.exec(script)
   if (!result) throw new Error(global.i18n.t('user_api_add_failed_tip'))
+  return matchInfo(result[0])
+}
 
-  let scriptInfo = matchInfo(result[0])
+/**
+ * 用在线脚本覆盖已导入的源，同时重新解析头部注释里的元数据
+ */
+export const updateUserApiScript = async(id: string, script: string, url?: string): Promise<LX.UserApi.UserApiInfo> => {
+  const target = userApis.find(api => api.id === id)
+  if (!target) throw new Error('api not found')
+  const scriptInfo = parseUserApiScriptInfo(script)
+  // 新脚本头注释缺少某字段时保留原值，避免把已有信息清成空串
+  target.name = scriptInfo.name || target.name
+  target.description = scriptInfo.description || target.description
+  target.author = scriptInfo.author || target.author
+  target.homepage = scriptInfo.homepage || target.homepage
+  target.version = scriptInfo.version || target.version
+  if (url) target.url = url
+  if (target.autoUpdate == null) target.autoUpdate = true
+  target.scriptHash = stringMd5(script)
+  target.updateTime = Date.now()
+  await saveDataMultiple([
+    [userApiPrefix, userApis],
+    [`${userApiPrefix}${id}`, script],
+  ])
+  return target
+}
+
+export const setUserApiAutoUpdate = async(id: string, enable: boolean) => {
+  const target = userApis.find(api => api.id === id)
+  if (!target) return
+  target.autoUpdate = enable
+  await saveData(userApiPrefix, userApis)
+}
+
+export const setUserApiUpdateTime = async(ids: string[]) => {
+  if (!ids.length) return
+  const time = Date.now()
+  let updated = false
+  for (const api of userApis) {
+    if (!ids.includes(api.id)) continue
+    api.updateTime = time
+    updated = true
+  }
+  if (updated) await saveData(userApiPrefix, userApis)
+}
+
+export const addUserApi = async(script: string, url?: string): Promise<LX.UserApi.UserApiInfo> => {
+  const scriptInfo = parseUserApiScriptInfo(script)
+
+  // 同一个在线地址重复导入时直接更新已有源，避免列表中出现重复项
+  const existApi = url ? userApis.find(api => api.url === url) : undefined
+  if (existApi) return updateUserApiScript(existApi.id, script, url)
 
   scriptInfo.name ||= `user_api_${new Date().toLocaleString()}`
   const apiInfo: LX.UserApi.UserApiInfo = {
     id: `user_api_${Math.random().toString().substring(2, 5)}_${Date.now()}`,
     ...scriptInfo,
     allowShowUpdateAlert: true,
+    scriptHash: stringMd5(script),
+    ...(url ? { url, autoUpdate: true, updateTime: Date.now() } : {}),
   }
   userApis.push(apiInfo)
   await saveDataMultiple([
