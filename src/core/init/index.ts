@@ -12,6 +12,7 @@ import { setApiSource } from '@/core/apiSource'
 import commonActions from '@/store/common/action'
 import settingState from '@/store/setting/state'
 import { checkUpdate } from '@/core/version'
+import { initUserApiAutoUpdate } from '@/core/userApiUpdate'
 import { bootLog } from '@/utils/bootLog'
 import { cheatTip } from '@/utils/tools'
 
@@ -62,6 +63,9 @@ export default async() => {
 
   void initSync(setting)
   bootLog('Sync inited.')
+
+  initUserApiAutoUpdate()
+  bootLog('User api auto update inited.')
 
   // syncSetting()
 
