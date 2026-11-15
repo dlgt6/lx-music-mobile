@@ -6,7 +6,7 @@ import Input, { type InputType } from '@/components/common/Input'
 import { createStyle, toast } from '@/utils/tools'
 import { useTheme } from '@/store/theme/hook'
 import { useI18n } from '@/lang'
-import { httpFetch } from '@/utils/request'
+import { fetchUserApiScript } from '@/core/userApiUpdate'
 import { handleImportScript } from './action'
 
 interface UrlInputType {
@@ -85,22 +85,22 @@ export default forwardRef<ScriptImportOnlineType, {}>((props, ref) => {
       url = ''
       urlInputRef.current?.setText('')
     }
-    if (!url.length) return
+    if (!url.length) {
+      toast(t('user_api_url_invalid_tip'))
+      return
+    }
     setBtn({ disabled: true, text: t('user_api_btn_import_online_input_loading') })
     let script: string
     try {
-      script = await httpFetch(url).promise.then(resp => resp.body) as string
-    } catch (err: any) {
-      toast(t('user_api_import_failed_tip', { message: err.message }), 'long')
+      script = await fetchUserApiScript(url)
+    } catch (err) {
+      toast(t('user_api_import_failed_tip', { message: err instanceof Error ? err.message : String(err) }), 'long')
       return
     } finally {
       setBtn({ disabled: false, text: t('user_api_btn_import_online_input_confirm') })
     }
-    if (script.length > 9_000_000) {
-      toast(t('user_api_import_failed_tip', { message: 'Too large script' }), 'long')
-      return
-    }
-    void handleImportScript(script)
+    // 保留源地址，之后才能自动检查远程脚本更新
+    void handleImportScript(script, url)
 
     alertRef.current?.setVisible(false)
   }

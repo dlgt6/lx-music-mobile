@@ -8,6 +8,7 @@ import Dialog, { type DialogType } from '@/components/common/Dialog'
 import Button from '@/components/common/Button'
 import List from './List'
 import ImportBtn from './ImportBtn'
+import { checkUserApiUpdate, refreshAllUserApi } from '@/core/userApiUpdate'
 
 // interface UrlInputType {
 //   setText: (text: string) => void
@@ -66,11 +67,14 @@ export default forwardRef<UserApiEditModalType, {}>((props, ref) => {
   // const sourceSelectorRef = useRef<SourceSelectorType>(null)
   // const inputRef = useRef<UrlInputType>(null)
   const [visible, setVisible] = useState(false)
+  const [checking, setChecking] = useState(false)
   const theme = useTheme()
   const t = useI18n()
 
   const handleShow = () => {
     dialogRef.current?.setVisible(true)
+    // 打开管理页面时顺带检查一次（受最小间隔限制）
+    void checkUserApiUpdate()
     // requestAnimationFrame(() => {
     // inputRef.current?.setText('')
     // sourceSelectorRef.current?.setSource(source)
@@ -78,6 +82,14 @@ export default forwardRef<UserApiEditModalType, {}>((props, ref) => {
     //   inputRef.current?.focus()
     // }, 300)
     // })
+  }
+
+  const handleCheckUpdate = () => {
+    if (checking) return
+    setChecking(true)
+    void refreshAllUserApi().finally(() => {
+      setChecking(false)
+    })
   }
   useImperativeHandle(ref, () => ({
     show() {
@@ -122,6 +134,11 @@ export default forwardRef<UserApiEditModalType, {}>((props, ref) => {
             <View style={styles.btns}>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={handleCancel}>
                 <Text size={14} color={theme['c-button-font']}>{t('close')}</Text>
+              </Button>
+              <Button disabled={checking} style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={handleCheckUpdate}>
+                <Text size={14} color={theme['c-button-font']}>
+                  { checking ? t('user_api_btn_check_update_loading') : t('user_api_btn_check_update') }
+                </Text>
               </Button>
               <ImportBtn btnStyle={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} />
             </View>

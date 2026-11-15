@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import Text from '@/components/common/Text'
 import { View, TouchableOpacity, ScrollView } from 'react-native'
 import { confirmDialog, createStyle } from '@/utils/tools'
@@ -6,30 +6,45 @@ import { useTheme } from '@/store/theme/hook'
 import { useI18n } from '@/lang'
 import { useUserApiList, state as userApiState } from '@/store/userApi'
 import { useSettingValue } from '@/store/setting/hook'
-import { removeUserApi, setUserApiAllowShowUpdateAlert } from '@/core/userApi'
+import { removeUserApi, setUserApiAllowShowUpdateAlert, setUserApiAutoUpdate } from '@/core/userApi'
+import { refreshUserApi } from '@/core/userApiUpdate'
 import { BorderRadius } from '@/theme'
 import CheckBox from '@/components/common/CheckBox'
 import { Icon } from '@/components/common/Icon'
 import settingState from '@/store/setting/state'
 import apiSourceInfo from '@/utils/musicSdk/api-source-info'
 import { setApiSource } from '@/core/apiSource'
+import ScriptUpdateUrl, { type ScriptUpdateUrlType } from './ScriptUpdateUrl'
 
 const formatVersionName = (version: string) => {
   return /^\d/.test(version) ? `v${version}` : version
 }
-const ListItem = ({ item, activeId, onRemove, onChangeAllowShowUpdateAlert }: {
+const ListItem = ({ item, activeId, refreshing, onRemove, onChangeAllowShowUpdateAlert, onChangeAutoUpdate, onRefresh, onEditUrl }: {
   item: LX.UserApi.UserApiInfo
   activeId: string
+  refreshing: boolean
   onRemove: (id: string, name: string) => void
   onChangeAllowShowUpdateAlert: (id: string, enabled: boolean) => void
+  onChangeAutoUpdate: (id: string, enabled: boolean) => void
+  onRefresh: (item: LX.UserApi.UserApiInfo) => void
+  onEditUrl: (item: LX.UserApi.UserApiInfo) => void
 }) => {
   const theme = useTheme()
   const t = useI18n()
   const changeAllowShowUpdateAlert = (check: boolean) => {
     onChangeAllowShowUpdateAlert(item.id, check)
   }
+  const changeAutoUpdate = (check: boolean) => {
+    onChangeAutoUpdate(item.id, check)
+  }
   const handleRemove = () => {
     onRemove(item.id, item.name)
+  }
+  const handleRefresh = () => {
+    onRefresh(item)
+  }
+  const handleEditUrl = () => {
+    onEditUrl(item)
   }
 
   return (
@@ -53,9 +68,31 @@ const ListItem = ({ item, activeId, onRemove, onChangeAllowShowUpdateAlert }: {
             <Text size={12} color={theme['c-font-label']}>{item.description}</Text>
           ) : null
         }
-        <CheckBox check={item.allowShowUpdateAlert} label={t('user_api_allow_show_update_alert')} onChange={changeAllowShowUpdateAlert} size={0.86} />
+        <TouchableOpacity onPress={handleEditUrl}>
+          <Text size={11} numberOfLines={1} color={theme['c-font-label']}>
+            { item.url || t('user_api_no_update_url') }
+          </Text>
+        </TouchableOpacity>
+        {
+          item.updateTime ? (
+            <Text size={11} color={theme['c-font-label']}>
+              { t('user_api_last_check_time', { time: new Date(item.updateTime).toLocaleString() }) }
+            </Text>
+          ) : null
+        }
+        <View style={styles.checkBoxs}>
+          <CheckBox check={item.allowShowUpdateAlert} label={t('user_api_allow_show_update_alert')} onChange={changeAllowShowUpdateAlert} size={0.86} />
+          {
+            item.url ? (
+              <CheckBox check={item.autoUpdate !== false} label={t('user_api_auto_update')} onChange={changeAutoUpdate} size={0.86} />
+            ) : null
+          }
+        </View>
       </View>
       <View style={styles.listItemRight}>
+        <TouchableOpacity style={styles.btn} onPress={handleRefresh} disabled={refreshing}>
+          <Icon name="available_updates" color={refreshing ? theme['c-font-label'] : theme['c-button-font']} />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.btn} onPress={handleRemove}>
           <Icon name="close" color={theme['c-button-font']} />
         </TouchableOpacity>
@@ -78,6 +115,8 @@ export default () => {
   const apiSource = useSettingValue('common.apiSource')
   const theme = useTheme()
   const t = useI18n()
+  const urlEditRef = useRef<ScriptUpdateUrlType>(null)
+  const [refreshingIds, setRefreshingIds] = useState<string[]>([])
 
   const handleRemove = useCallback(async(id: string, name: string) => {
     const confirm = await confirmDialog({
@@ -98,27 +137,53 @@ export default () => {
   const handleChangeAllowShowUpdateAlert = useCallback((id: string, enabled: boolean) => {
     void setUserApiAllowShowUpdateAlert(id, enabled)
   }, [])
+  const handleChangeAutoUpdate = useCallback((id: string, enabled: boolean) => {
+    void setUserApiAutoUpdate(id, enabled)
+  }, [])
+  const handleEditUrl = useCallback((item: LX.UserApi.UserApiInfo) => {
+    urlEditRef.current?.show(item)
+  }, [])
+  const handleRefresh = useCallback(async(item: LX.UserApi.UserApiInfo) => {
+    if (!item.url) {
+      urlEditRef.current?.show(item)
+      return
+    }
+    if (refreshingIds.includes(item.id)) return
+    setRefreshingIds(ids => [...ids, item.id])
+    try {
+      await refreshUserApi(item.id)
+    } finally {
+      setRefreshingIds(ids => ids.filter(id => id != item.id))
+    }
+  }, [refreshingIds])
 
   return (
-    <ScrollView style={styles.scrollView} keyboardShouldPersistTaps={'always'}>
-      <View onStartShouldSetResponder={() => true}>
-        {
-          userApiList.length
-            ? userApiList.map((item) => {
-              return (
-              <ListItem
-                key={item.id}
-                item={item}
-                activeId={apiSource}
-                onRemove={handleRemove}
-                onChangeAllowShowUpdateAlert={handleChangeAllowShowUpdateAlert}
-              />
-              )
-            })
-            : <Text style={styles.tipText} color={theme['c-font-label']}>{t('user_api_empty')}</Text>
-        }
-      </View>
-    </ScrollView>
+    <>
+      <ScrollView style={styles.scrollView} keyboardShouldPersistTaps={'always'}>
+        <View onStartShouldSetResponder={() => true}>
+          {
+            userApiList.length
+              ? userApiList.map((item) => {
+                return (
+                <ListItem
+                  key={item.id}
+                  item={item}
+                  activeId={apiSource}
+                  refreshing={refreshingIds.includes(item.id)}
+                  onRemove={handleRemove}
+                  onChangeAllowShowUpdateAlert={handleChangeAllowShowUpdateAlert}
+                  onChangeAutoUpdate={handleChangeAutoUpdate}
+                  onRefresh={api => { void handleRefresh(api) }}
+                  onEditUrl={handleEditUrl}
+                />
+                )
+              })
+              : <Text style={styles.tipText} color={theme['c-font-label']}>{t('user_api_empty')}</Text>
+          }
+        </View>
+      </ScrollView>
+      <ScriptUpdateUrl ref={urlEditRef} />
+    </>
   )
 }
 
@@ -146,14 +211,16 @@ const styles = createStyle({
   },
   listItemRight: {
     flex: 0,
-    // backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  // btns: {
-  //   padding: 5,
-  // },
+  checkBoxs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
   btn: {
     padding: 10,
-    // backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   tipText: {
     textAlign: 'center',
@@ -161,5 +228,3 @@ const styles = createStyle({
     marginBottom: 15,
   },
 })
-
-
