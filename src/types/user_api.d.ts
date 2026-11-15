@@ -23,6 +23,14 @@ declare namespace LX {
       homepage: string
       version: string
       sources?: UserApiSources
+      /** 在线导入时的脚本地址，本地导入的源没有此字段 */
+      url?: string
+      /** 是否自动检查远程更新，未设置时视为开启 */
+      autoUpdate?: boolean
+      /** 当前已保存脚本内容的 MD5，用于判断远程脚本是否变化 */
+      scriptHash?: string
+      /** 最近一次成功检查更新的时间戳 */
+      updateTime?: number
     }
 
     interface UserApiStatus {
