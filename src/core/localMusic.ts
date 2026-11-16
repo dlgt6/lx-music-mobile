@@ -7,7 +7,11 @@ import { setMusicList } from '@/utils/listManage'
 import { formatPlayTime2 } from '@/utils'
 import { externalStorageDirectoryPath } from '@/utils/fs'
 import { toast, requestStoragePermission } from '@/utils/tools'
-import { PermissionsAndroid, Platform } from 'react-native'
+import { AppState, PermissionsAndroid, Platform } from 'react-native'
+import settingState from '@/store/setting/state'
+
+let lastAutoScanTime = 0
+let autoRescanRegistered = false
 
 const normalizePath = (path: string) => path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 
@@ -72,9 +76,14 @@ const ensureScanPermissions = async(): Promise<boolean> => {
   if (Platform.OS !== 'android') return true
   if (Number(Platform.Version) >= 33) {
     try {
-      const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO)
-      if (result !== PermissionsAndroid.RESULTS.GRANTED) {
-        toast('需要音频读取权限才能扫描本地音乐', 'long')
+      const results = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
+        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+      ])
+      const audioGranted = results[PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO] === PermissionsAndroid.RESULTS.GRANTED
+      const legacyGranted = results[PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE] === PermissionsAndroid.RESULTS.GRANTED
+      if (!audioGranted && !legacyGranted) {
+        toast('需要音频读取权限才能扫描本地音乐，请在系统设置中授权后重试', 'long')
         return false
       }
       return true
@@ -92,6 +101,7 @@ const ensureScanPermissions = async(): Promise<boolean> => {
 
 export const scanLocalMusic = async(): Promise<boolean> => {
   if (localMusicState.isScanning) return false
+  lastAutoScanTime = Date.now()
   localMusicActions.setScanning(true)
   localMusicActions.setScanProgress(0, 0)
   try {
@@ -145,7 +155,7 @@ export const scanLocalMusic = async(): Promise<boolean> => {
     localMusicActions.setMusics(musics)
     setMusicList('local_music', musics)
     global.app_event.myListMusicUpdate(['local_music'])
-    toast(`本地音乐扫描完成，共 ${musics.length} 首`, 'long')
+    toast(musics.length ? `本地音乐扫描完成，共 ${musics.length} 首` : '未找到本地音乐，请检查存储权限或手动添加歌曲', 'long')
     return true
   } catch (error: any) {
     toast(`本地音乐扫描失败：${error.message ?? error}`, 'long')
@@ -155,10 +165,23 @@ export const scanLocalMusic = async(): Promise<boolean> => {
   }
 }
 
+const setupAutoRescan = () => {
+  if (autoRescanRegistered) return
+  autoRescanRegistered = true
+  AppState.addEventListener('change', (state) => {
+    if (state != 'active') return
+    if (!settingState.setting['localMusic.enable'] || !settingState.setting['localMusic.autoScan']) return
+    if (Date.now() - lastAutoScanTime < 10000) return
+    if (localMusicState.musics.length) return
+    void scanLocalMusic()
+  })
+}
+
 export const initLocalMusic = async() => {
   const musics = await getLocalMusics()
   localMusicActions.setMusicsSilent(musics)
   setMusicList('local_music', musics)
+  setupAutoRescan()
 }
 
 export const getLocalMusicList = () => localMusicState.musics
