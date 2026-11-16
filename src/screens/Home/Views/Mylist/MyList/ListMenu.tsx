@@ -1,10 +1,13 @@
 import { useRef, useImperativeHandle, forwardRef, useState } from 'react'
 import { useI18n } from '@/lang'
 import Menu, { type Menus, type MenuType, type Position } from '@/components/common/Menu'
-import { LIST_IDS } from '@/config/constant'
+import { COMPONENT_IDS, LIST_IDS } from '@/config/constant'
 import musicSdk from '@/utils/musicSdk'
 import { scaleSizeW } from '@/utils/pixelRatio'
 import listState from '@/store/list/state'
+import { scanLocalMusic } from '@/core/localMusic'
+import { navigations } from '@/navigation'
+import commonState from '@/store/common/state'
 
 export interface SelectInfo {
   listInfo: LX.List.MyListInfo
@@ -69,6 +72,13 @@ export default forwardRef<ListMenuType, ListMenuProps>(({
   }))
 
   const handleSetMenu = (listInfo: LX.List.MyListInfo) => {
+    if (listInfo.id == 'local_music') {
+      setMenus([
+        { action: 'scanLocalMusic', label: t('list_local_music_scan') },
+        { action: 'openLocalMusic', label: t('list_local_music_open') },
+      ])
+      return
+    }
     let rename = false
     let sync = false
     let remove = false
@@ -77,6 +87,7 @@ export default forwardRef<ListMenuType, ListMenuProps>(({
     switch (listInfo.id) {
       case LIST_IDS.DEFAULT:
       case LIST_IDS.LOVE:
+      case 'local_music':
         break
       default:
         userList = listInfo as LX.List.UserListInfo
@@ -103,6 +114,14 @@ export default forwardRef<ListMenuType, ListMenuProps>(({
   const handleMenuPress = ({ action }: typeof menus[number]) => {
     const selectInfo = selectInfoRef.current
     switch (action) {
+      case 'scanLocalMusic':
+        void scanLocalMusic()
+        break
+      case 'openLocalMusic': {
+        const componentId = commonState.componentIds[COMPONENT_IDS.home]
+        if (componentId) navigations.pushLocalMusicScreen(componentId)
+        break
+      }
       case 'new':
         onNew(Math.max(selectInfo.index - 1, 0))
         break

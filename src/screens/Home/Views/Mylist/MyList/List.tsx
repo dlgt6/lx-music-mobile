@@ -5,10 +5,14 @@ import { Icon } from '@/components/common/Icon'
 
 import { useTheme } from '@/store/theme/hook'
 import { useActiveListId, useListFetching, useMyList } from '@/store/list/hook'
+import { useSettingValue } from '@/store/setting/hook'
 import { createStyle } from '@/utils/tools'
 import { LIST_SCROLL_POSITION_KEY } from '@/config/constant'
 import { getListPosition, saveListPosition } from '@/utils/data'
 import { setActiveList } from '@/core/list'
+
+import { useLocalMusicScanState } from '@/store/localMusic/hook'
+import { getLocalMusicList, scanLocalMusic } from '@/core/localMusic'
 import Text from '@/components/common/Text'
 import { type Position } from './ListMenu'
 import { scaleSizeH } from '@/utils/pixelRatio'
@@ -17,6 +21,39 @@ import Loading from '@/components/common/Loading'
 type FlatListType = FlatListProps<LX.List.MyListInfo>
 
 const ITEM_HEIGHT = scaleSizeH(40)
+const LOCAL_MUSIC_LIST_ID = 'local_music'
+const localMusicListInfo: LX.List.UserListInfo = { id: LOCAL_MUSIC_LIST_ID, name: '本地音乐', locationUpdateTime: null }
+
+const LocalMusicEntry = ({ active, onPress, onShowMenu }: {
+  active: boolean
+  onPress: () => void
+  onShowMenu: (position: Position) => void
+}) => {
+  const theme = useTheme()
+  const moreButtonRef = useRef<TouchableOpacity>(null)
+  const isScanning = useLocalMusicScanState()
+
+  const handleShowMenu = () => {
+    if (moreButtonRef.current?.measure) {
+      moreButtonRef.current.measure((fx, fy, width, height, px, py) => {
+        onShowMenu({ x: Math.ceil(px), y: Math.ceil(py), w: Math.ceil(width), h: Math.ceil(height) })
+      })
+    }
+  }
+
+  return (
+    <View style={{ ...styles.listItem, height: ITEM_HEIGHT }}>
+      <Icon style={styles.localIcon} name="sd-card" size={14} color={active ? theme['c-primary-font'] : theme['c-font']} />
+      {isScanning ? <Loading color={active ? theme['c-primary-font'] : theme['c-font']} style={styles.loading} /> : null}
+      <TouchableOpacity style={styles.listName} onPress={onPress}>
+        <Text numberOfLines={1} color={active ? theme['c-primary-font'] : theme['c-font']}>本地音乐</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={handleShowMenu} ref={moreButtonRef} style={styles.listMoreBtn}>
+        <Icon name="dots-vertical" color={theme['c-350']} size={12} />
+      </TouchableOpacity>
+    </View>
+  )
+}
 
 const ListItem = memo(({ item, index, activeId, onPress, onShowMenu }: {
   onPress: (item: LX.List.MyListInfo) => void
@@ -74,8 +111,10 @@ export default ({ onShowMenu }: {
   onShowMenu: (info: { listInfo: LX.List.MyListInfo, index: number }, position: Position) => void
 }) => {
   const flatListRef = useRef<FlatList>(null)
+  const autoScanRef = useRef(false)
   const allList = useMyList()
   const activeListId = useActiveListId()
+  const localMusicEnable = useSettingValue('localMusic.enable')
 
   const handleToggleList = (item: LX.List.MyListInfo) => {
     // setVisiblePanel(false)
@@ -85,6 +124,22 @@ export default ({ onShowMenu }: {
     })
   }
 
+
+  const handleToggleLocalMusic = () => {
+    global.app_event.changeLoveListVisible(false)
+    requestAnimationFrame(() => {
+      setActiveList(LOCAL_MUSIC_LIST_ID)
+    })
+    if (!autoScanRef.current && !getLocalMusicList().length) {
+      void scanLocalMusic().then((success) => {
+        if (success) autoScanRef.current = true
+      })
+    }
+  }
+
+  const showLocalMusicMenu = (position: Position) => {
+    onShowMenu({ listInfo: localMusicListInfo, index: 0 }, position)
+  }
 
   const handleScroll = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
     void saveListPosition(LIST_SCROLL_POSITION_KEY, nativeEvent.contentOffset.y)
@@ -112,7 +167,7 @@ export default ({ onShowMenu }: {
   )
   const getkey: FlatListType['keyExtractor'] = item => item.id
   const getItemLayout: FlatListType['getItemLayout'] = (data, index) => {
-    return { length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index }
+    return { length: ITEM_HEIGHT, offset: ITEM_HEIGHT * (index + (localMusicEnable ? 1 : 0)), index }
   }
 
   return (
@@ -128,6 +183,13 @@ export default ({ onShowMenu }: {
       initialNumToRender={18}
       renderItem={renderItem}
       keyExtractor={getkey}
+      ListHeaderComponent={localMusicEnable ? (
+        <LocalMusicEntry
+          active={activeListId == LOCAL_MUSIC_LIST_ID}
+          onPress={handleToggleLocalMusic}
+          onShowMenu={showLocalMusicMenu}
+        />
+      ) : null}
       // extraData={activeIndex}
       getItemLayout={getItemLayout}
     />
@@ -151,6 +213,10 @@ const styles = createStyle({
     paddingRight: 5,
     paddingLeft: 5,
     // borderBottomWidth: BorderWidths.normal,
+  },
+  localIcon: {
+    marginLeft: 3,
+    marginRight: 5,
   },
   listActiveIcon: {
     // width: 18,
