@@ -13,6 +13,7 @@ import Text from '@/components/common/Text'
 import { LIST_IDS } from '@/config/constant'
 import Loading from '@/components/common/Loading'
 import { useSettingValue } from '@/store/setting/hook'
+import settingState from '@/store/setting/state'
 
 export interface ActiveListProps {
   onShowSearchBar: () => void
@@ -35,6 +36,8 @@ export default forwardRef<ActiveListType, ActiveListProps>(({ onShowSearchBar, o
         return global.i18n.t('list_name_default')
       case LIST_IDS.LOVE:
         return global.i18n.t('list_name_love')
+      case 'local_music':
+        return '本地音乐'
       default:
         return listState.allList.find(l => l.id === currentListId)?.name ?? ''
     }
@@ -54,6 +57,10 @@ export default forwardRef<ActiveListType, ActiveListProps>(({ onShowSearchBar, o
 
   useEffect(() => {
     void getListPrevSelectId().then((id) => {
+      if (id == 'local_music' && !settingState.setting['localMusic.enable']) {
+        setActiveList(LIST_IDS.DEFAULT)
+        return
+      }
       setActiveList(id)
     })
   }, [])
