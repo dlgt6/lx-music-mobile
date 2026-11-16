@@ -79,6 +79,9 @@ const defaultSetting: LX.AppSetting = {
   'download.isEmbedLyricRoma': false,
   'download.isEmbedLyricAwlrc': false,
 
+  'localMusic.enable': true,
+  'localMusic.autoScan': false,
+
   'sync.enable': false,
 
   // 'theme.id': 'blue_plus',
