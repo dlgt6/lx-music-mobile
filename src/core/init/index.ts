@@ -15,6 +15,7 @@ import { checkUpdate } from '@/core/version'
 import { initUserApiAutoUpdate } from '@/core/userApiUpdate'
 import { bootLog } from '@/utils/bootLog'
 import { cheatTip } from '@/utils/tools'
+import { scanLocalMusic } from '@/core/localMusic'
 
 let isFirstPush = true
 const handlePushedHomeScreen = async() => {
@@ -24,6 +25,9 @@ const handlePushedHomeScreen = async() => {
       isFirstPush = false
       void checkUpdate()
       void initDeeplink()
+      if (settingState.setting['localMusic.enable'] && settingState.setting['localMusic.autoScan']) {
+        void scanLocalMusic()
+      }
     }
   } else {
     if (isFirstPush) isFirstPush = false

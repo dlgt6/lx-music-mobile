@@ -8,7 +8,7 @@ import { bootLog } from '@/utils/bootLog'
 import { getDislikeInfo, setDislikeInfo } from '@/core/dislikeList'
 import { unlink } from '@/utils/fs'
 import { TEMP_FILE_PATH } from '@/utils/tools'
-import { initLocalMusic, scanLocalMusic } from '@/core/localMusic'
+import { initLocalMusic } from '@/core/localMusic'
 // import { play, playList } from '../player/player'
 
 // const initPrevPlayInfo = async(appSetting: LX.AppSetting) => {
@@ -23,7 +23,7 @@ import { initLocalMusic, scanLocalMusic } from '@/core/localMusic'
 //   if (appSetting['player.startupAutoPlay']) setTimeout(play)
 // }
 
-export default async(appSetting: LX.AppSetting) => {
+export default async(_appSetting: LX.AppSetting) => {
   // await Promise.all([
   //   initUserApi(), // 自定义API
   // ]).catch(err => log.error(err))
@@ -34,9 +34,6 @@ export default async(appSetting: LX.AppSetting) => {
   bootLog('User list inited.')
   bootLog('Local music init...')
   await initLocalMusic()
-  if (appSetting['localMusic.enable'] && appSetting['localMusic.autoScan']) {
-    void scanLocalMusic()
-  }
   bootLog('Local music inited.')
 
   setNavActiveId((await getViewPrevState()).id)
