@@ -201,6 +201,16 @@ export class AppEvent extends Event {
   selectSyncMode(mode: LX.Sync.ModeType) {
     this.emit('selectSyncMode', mode)
   }
+
+  local_music_list_changed() {
+    this.emit('local_music_list_changed')
+  }
+  local_music_scan_state_changed() {
+    this.emit('local_music_scan_state_changed')
+  }
+  local_music_scan_progress_changed() {
+    this.emit('local_music_scan_progress_changed')
+  }
 }
 
 

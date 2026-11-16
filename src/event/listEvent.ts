@@ -27,6 +27,7 @@ const updateUserList = async(userLists: LX.List.UserListInfo[]) => {
 }
 
 const checkListExist = (changedIds: string[]) => {
+  if (listState.activeListId == 'local_music') return
   const index = changedIds.indexOf(listState.activeListId)
   if (index < 0 || listState.allList.some(l => l.id == listState.activeListId)) return
   setActiveList(LIST_IDS.DEFAULT)
